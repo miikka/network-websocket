@@ -45,7 +45,7 @@ module Network.Websocket( Config(..), ConfigRestriction(..), WS(..),
           configOnOpen    :: WS -> IO (),
 
           -- | The onmessage callback, called when a message is received
-          configOnMessage :: WS -> String -> IO (),
+          configOnMessage :: WS -> ByteString -> IO (),
 
           -- | The onclose callback, called when the connection is closed.
           configOnClose   :: WS -> IO ()
@@ -60,20 +60,21 @@ module Network.Websocket( Config(..), ConfigRestriction(..), WS(..),
           wsHandle :: Handle
         }
 
-    readFrame :: Handle -> IO String
+    readFrame :: Handle -> IO ByteString
     readFrame h = readUntil h ""
         where readUntil h str =
-                  do new <- hGetChar h
-                     if new == chr 0
+                  do new <- B.hGet h 1
+                     let newChr = B.head new
+                     if newChr == 0
                         then readUntil h ""
-                        else if new == chr 255
+                        else if newChr == 255
                                 then return str
-                                else readUntil h (str ++ [new])
+                                else readUntil h (B.append str new)
 
-    sendFrame :: Handle -> String -> IO ()
+    sendFrame :: Handle -> ByteString -> IO ()
     sendFrame h s = do
       hPutChar h (chr 0)
-      hPutStr  h s
+      B.hPut h s
       hPutChar h (chr 255)
       hFlush h
 
