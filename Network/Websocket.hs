@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, OverloadedStrings #-}
 
 -- | Library for creating Websocket servers.  Some parts cribbed from
 -- Jeff Foster's blog post at
@@ -12,21 +12,17 @@ module Network.Websocket( Config(..), ConfigRestriction(..), WS(..),
     import Control.Monad
     import Data.Char (isSpace)
     import Data.Maybe
+    import Data.ByteString (ByteString)
+    import qualified Data.ByteString as B
     import qualified Network as N
     import qualified Network.Socket as NS
     import Network.Web.HTTP
-    import Network.URI
+    import Network.Web.URI
     import Network.Web.Server
     import System.IO
 
 
-    instance Show Request where
-        show req = let method = show $ reqMethod req
-                       uri    = show $ reqURI req
-                       fields = show $ reqFields req
-                   in method ++ " " ++ uri ++ "\n" ++ fields
-
-    data ConfigRestriction  = Any | Only [String]
+    data ConfigRestriction  = Any | Only [ByteString]
     restrictionValid x Any = True
     restrictionValid x (Only xs) = elem x xs
                                    
@@ -88,7 +84,7 @@ module Network.Websocket( Config(..), ConfigRestriction(..), WS(..),
       upgrade  <- lookupField (FkOther "Upgrade") req
       origin   <- lookupField (FkOther "Origin") req
       host     <- lookupField FkHost req
-      hostURI  <- parseURI ("ws://" ++ host ++ "/")
+      hostURI  <- parseURI (B.concat ["ws://", host, "/"])
       hostAuth <- uriAuthority hostURI
       let domain = uriRegName hostAuth
 
@@ -107,13 +103,13 @@ module Network.Websocket( Config(..), ConfigRestriction(..), WS(..),
                     Nothing -> putStrLn "Got bad request"
                     Just req -> f h req)
 
-    sendHandshake h origin location = hPutStr h handshake >> hFlush h
-        where handshake = "HTTP/1.1 101 Web Socket Protocol Handshake\r\n\
-                          \Upgrade: WebSocket\r\n\
-                          \Connection: Upgrade\r\n\
-                          \WebSocket-Origin: " ++ origin ++ "\r\n\
-                          \WebSocket-Location: "++ show location ++ "\r\n\
-                          \WebSocket-Protocol: sample\r\n\r\n"
+    sendHandshake h origin location = B.hPut h handshake >> hFlush h
+        where handshake = B.concat ["HTTP/1.1 101 Web Socket Protocol Handshake\r\n\
+                                    \Upgrade: WebSocket\r\n\
+                                    \Connection: Upgrade\r\n\
+                                    \WebSocket-Origin: ", origin, "\r\n\
+                                    \WebSocket-Location: ", toURL location, "\r\n\
+                                    \WebSocket-Protocol: sample\r\n\r\n"]
 
 
     accept config socket =
